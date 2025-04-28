@@ -1,7 +1,4 @@
-SELECT COUNT(*) FROM census_day_enrollment
-WHERE aggregate_level = 'S' AND reporting_category = 'TA';
-
-SELECT * FROM cif_team_results;
+-- Raw data contains much for data than needed. Filter to include only high school level data
 
 CREATE VIEW public_high_school_enrollment AS
 SELECT school_code, school_name, 'public' AS school_type, charter, 
@@ -32,19 +29,6 @@ SELECT school_code, school_name, chronic_absenteeism_rate
 FROM absenteeism_data
 WHERE aggregate_level = 'S'
 AND reporting_category = 'TA';
--- AND (charter = 'Yes' OR charter = 'No')
--- AND (dass = 'Yes' OR dass = 'No');
-
-SELECT COUNT(*)
-FROM cif_team_results team
-LEFT JOIN public_school_enrollment enrollment
-ON team.Team = enrollment.school_name
-WHERE school_code IS NOT NULL;
-
-SELECT team.*, school_name, total_enr
-FROM cif_team_results team
-LEFT JOIN private_school_data enrollment
-ON team.Team = enrollment.school_name;
 
 -- remove whitespaces from school names in case that is preventing matches in joins
 UPDATE census_day_enrollment
@@ -55,10 +39,6 @@ SET team = TRIM(team);
 
 UPDATE private_school_data
 SET school_name = TRIM(school_name);
-
-SELECT * FROM census_day_enrollment
-WHERE school_name LIKE '%arnold o. beckman%';
-
 
 -- what percent of high schools in public school enrollment end with a certain word?
 -- 'high' 49%
@@ -104,43 +84,6 @@ FROM cif_team_results
 GROUP BY last_word
 ORDER BY count DESC;
 
-SELECT COUNT(*)
-FROM (
-SELECT team_name, COUNT(team_name)
-FROM (
-SELECT
-	teams.Team AS team_name,
-    public_schools.school_name AS public_name,
-	private_schools.school_name AS private_name
-FROM cif_team_results AS teams
-	LEFT JOIN public_high_school_enrollment AS public_schools
-		ON public_schools.school_name LIKE CONCAT('%',teams.Team, '%')
-	LEFT JOIN private_high_school_enr AS private_schools
-		ON private_schools.school_name LIKE CONCAT('%',teams.Team, '%')
-WHERE (public_schools.school_name IS NULL AND private_schools.school_name IS NOT NULL)
-OR (public_schools.school_name IS NOT NULL AND private_schools.school_name IS NULL)
-) joined_teams
-GROUP BY team_name
-HAVING COUNT(team_name) <= 1 ) unique_teams;
-
-
-SELECT team_name, COUNT(team_name)
-FROM (
-SELECT
-	teams.Team AS team_name,
-    public_schools.school_name AS public_name,
-	private_schools.school_name AS private_name
-FROM cif_team_results AS teams
-	LEFT JOIN public_high_school_enrollment AS public_schools
-		ON public_schools.school_name LIKE CONCAT(teams.Team, '%')
-	LEFT JOIN private_school_data AS private_schools
-		ON private_schools.school_name LIKE CONCAT(teams.Team, '%')
-		AND private_schools.high_school_enr > 0
-WHERE (public_schools.school_name IS NULL AND private_schools.school_name IS NOT NULL)
-OR (public_schools.school_name IS NOT NULL AND private_schools.school_name IS NULL)
-) joined_teams
-GROUP BY team_name
-HAVING COUNT(team_name) <= 2;
 
 SELECT
 	teams.Team AS team_name,
@@ -158,6 +101,7 @@ FROM cif_team_results AS teams
 WHERE (public_schools.school_name IS NULL AND private_schools.school_name IS NOT NULL)
 OR (public_schools.school_name IS NOT NULL AND private_schools.school_name IS NULL);
 
+-- used to make temp table closest_match
 CREATE TEMPORARY TABLE teams_with_no_matches
 WITH school_name_matches AS (
 SELECT
@@ -183,9 +127,8 @@ FROM school_name_matches
 GROUP BY team_name
 HAVING COUNT(school_name) =0;
 
-DROP TABLE closest_match;
-DROP TABLE teams_with_no_matches;
-
+-- this temp table reduces later query computation time
+-- finds the closest matching school to a team ordered by levenshtein rating
 CREATE TEMPORARY TABLE closest_match
 SELECT team,
 	(
@@ -205,8 +148,7 @@ FROM teams_with_no_matches;
 
 SELECT * FROM closest_match;
 
-DROP TABLE team_school_matches;
-
+-- main logic of matching a team to school name
 CREATE TEMPORARY TABLE matched_schools AS
 WITH school_name_matches AS (
 SELECT
@@ -244,9 +186,7 @@ SELECT team_name AS team, COUNT(school_name) as possible_matches,
 FROM school_name_matches
 GROUP BY team_name;
 
-
-DROP TABLE team_school_matches;
-
+-- final table where teams are matched to a shcool name
 CREATE TABLE team_school_matches AS
 SELECT team, matched_school FROM matched_schools
 WHERE NOT (possible_matches = 0 AND levenshtein(team,matched_school) > 2)
@@ -255,6 +195,7 @@ ORDER BY team;
 
 SELECT * from team_school_matches;
 
+-- levenshtein function used in matching teams to schools
 DELIMITER $$
 CREATE FUNCTION levenshtein( s1 VARCHAR(255), s2 VARCHAR(255) )
     RETURNS INT
@@ -299,10 +240,8 @@ CREATE FUNCTION levenshtein( s1 VARCHAR(255), s2 VARCHAR(255) )
     END$$
 DELIMITER ;
 
--- create view that has all relevant info for each team, that can be exported for visualization
--- CREATE VIEW team_and_school_data AS
-
-SELECT * FROM (
+-- query that gives final results to be exported for visualization
+SELECT COUNT(*) FROM (
 SELECT team_results.Place AS place, team_results.Team AS team, team_results.Points as points,
 (CAST(SUBSTRING_INDEX(team_results.Team_Time_Avg, ':', 1) AS UNSIGNED) * 60) +
 CAST(SUBSTRING_INDEX(team_results.Team_Time_Avg, ':', -1) AS UNSIGNED) AS team_time_avg_seconds,
@@ -364,15 +303,9 @@ ON team_results.Team = matches.team
 JOIN private_high_school_enrollment private
 ON private.school_name = matches.matched_school
 ) inter
-WHERE school_type IS NULL;
+WHERE charter = 'Y';
 
-
-SELECT * FROM sb_data
-WHERE school_code = 1030683
-AND student_group_id = 1
-AND grade = 11;
-
-
+-- used in above results query
 CREATE TEMPORARY TABLE temp_sb_data
 SELECT data_1.school_code AS school_code,
 data_1.mean_scale_score AS ela_mean_score,
@@ -426,3 +359,32 @@ SELECT COUNT(*)
 FROM team_school_matches matches
 JOIN public_high_school_enrollment enrollment
 ON matches.matched_school = enrollment.school_name;
+
+-- summary statistics of statewide data
+SELECT AVG(graduation_rate) FROM public_high_school_graduation_data;
+
+SELECT AVG(chronic_absenteeism_rate) FROM public_high_school_absenteeism_data;
+
+SELECT chronic_absenteeism_rate FROM absenteeism_data -- statewide chronic absenteeism rate
+WHERE aggregate_level = 'T'
+AND reporting_category = 'TA'
+AND charter = 'All'
+AND dass = 'All';
+
+SELECT regular_hs_diploma_graduation_rate -- statewide graduation rate
+FROM graduation_outcome_data
+WHERE aggregate_level = 'T'
+AND reporting_category = 'TA'
+AND charter = 'All'
+AND dass = 'All';
+
+SELECT 
+SUM(free_meal_count_k12) / SUM(enrollment_k12) AS statewide_free_meal_eligible
+FROM frpm_data
+WHERE high_grade = 12;
+
+SELECT 
+SUM(frpm_count_k12) / SUM(enrollment_k12) AS statewide_frpm_eligible
+FROM frpm_data
+WHERE high_grade = 12;
+
