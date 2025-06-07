@@ -22,12 +22,15 @@ I then used minimum [Levenshtein distance](https://en.wikipedia.org/wiki/Levensh
 
 From there it was a mostly straightforward process of joining the state championship results and school enrollment data with additional school data, all sourced from the CA Department of Education. I took the graduation rate from the [2023-24 Adjusted Cohort Graduation Rate and Outcome dataset](https://www.cde.ca.gov/ds/ad/filesacgr.asp). I used percent of students eligible for free meals from the [Free or Reduced-Price Meal (Student Poverty) dataset](https://www.cde.ca.gov/ds/ad/filessp.asp). I used chronic absenteeism rate from the [2023-24 Chronic Absenteeism dataset](https://www.cde.ca.gov/ds/ad/filesabd.asp). From the California Assessment of Student Performance and Progress, I used the [2023-24 California Statewide ELA and Mathematics combined research file](https://caaspp-elpac.ets.org/caaspp/ResearchFileListSB?ps=true&lstTestYear=2024&lstTestType=B&lstCounty=00&lstDistrict=00000&lstFocus=a) to gather data on Smarter Balanced Assessment scores for each school. All 11th graders are required to take these assessments. I used data including each school’s mean Mathematics and English Language Arts scores, as well as percentages of students meeting expectations, not meeting expectations, or exceeding expectations. There was some minimal data cleaning I needed to perform in MySQL, such as converting metrics represented by percentage strings to floating points.
 
-It is important to note that private schools are not required to report their data to California, so I was only able to gather enrollment data for the private schools.
+It is important to note that private schools are not required to report their data to California, so I was only able to gather enrollment data for the public schools.
 
 After combining data for each school, I exported it to Tableau for visualization and analysis, and used MySQL queries for some additional summary statistics.
 
 
 ## Results
+
+All visualizations including interactive dashboards can be viewed here: [See Dashboard on Tableau Public](https://public.tableau.com/app/profile/nathaniel.webster/viz/CIFXCSchoolMetrics/SchoolPerformanceMetrics)
+
 I decided to look first at the effect of a school’s enrollment size on how well their team performed. Plotting team time average—simply the average finishing time of each of the team’s runners—vs the school’s enrollment, we see a correlation between enrollment and faster times. Note that a lower team time average is better. This holds for both boys and girls teams, as the regression for both groups has a statistically significant p-value. The R-squared value for boys is 0.25 compared to 0.11 for girls teams, so enrollment explains some but not all of the variation in team time.
 
 ![](result_images/enrollment1.png)

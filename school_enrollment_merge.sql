@@ -388,3 +388,4 @@ SUM(frpm_count_k12) / SUM(enrollment_k12) AS statewide_frpm_eligible
 FROM frpm_data
 WHERE high_grade = 12;
 
+SELECT COUNT(*) from sb_data;
